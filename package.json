@@ -1,0 +1,26 @@
+{
+  "name": "acc-process-data-extract",
+  "version": "1.0.0",
+  "description": "Add a documents table for all the documents referenced in an ACC/BIM 360 Data Extract",
+  "main": "acc-process-data-extract.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahmad-hisham/acc-process-data-extract.git"
+  },
+  "keywords": [
+    "acc",
+    "bim360",
+    "data-connector",
+    "forge",
+    "autodesk"
+  ],
+  "author": "Ahmad Khairat",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ahmad-hisham/acc-process-data-extract/issues"
+  },
+  "homepage": "https://github.com/ahmad-hisham/acc-process-data-extract#readme"
+}
