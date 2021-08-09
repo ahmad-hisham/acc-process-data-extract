@@ -2,6 +2,8 @@
 
 const fs = require('fs/promises');
 const Papa = require('papaparse');
+const axios = require('axios').default;
+const config = require("./acc-config");
 
 async function readCSVFiles() {
     // Files to process
@@ -36,6 +38,29 @@ async function readCSVFiles() {
     return groupedDocuments;
 }
 
+async function readUrnsData(projects) {
+    const accessToken = await getCredentials();
+
+    return [];
+}
+
+async function getCredentials() {
+    const client_id = config.credentials.client_id;
+    const client_secret = config.credentials.client_secret;
+    const scopes = config.scopes;
+
+    let url = 'https://developer.api.autodesk.com/authentication/v1/authenticate';
+    let opts = {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+    };
+    let data = `client_id=${client_id}&client_secret=${client_secret}&grant_type=client_credentials&scope=${scopes.join('%20')}`;
+    let response = await axios.post(url, data, opts);
+
+    return response.data.access_token;
+}
+
 function groupBy(objectArray, keyProperty, valueProperty, uniqueOnly = true) {
     return objectArray.reduce((acc, obj) => {
         let key = obj[keyProperty]
@@ -51,6 +76,7 @@ function groupBy(objectArray, keyProperty, valueProperty, uniqueOnly = true) {
 // Main entry
 async function run() {
     let documentsUrns = await readCSVFiles();
+    let documentsData = await readUrnsData(documentsUrns);
 }
 
 run();
