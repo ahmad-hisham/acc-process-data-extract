@@ -41,7 +41,38 @@ async function readCSVFiles() {
 async function readUrnsData(projects) {
     const accessToken = await getCredentials();
 
-    return [];
+    let documentsDetails = [];
+
+    for (const project in projects) {
+        const projectId = project;
+        const documentsUrns = projects[project];
+
+        if (documentsUrns.length == 0)
+            continue; // Array is empty, skip
+
+        // Slice the document urns into chunks of 50 each
+        const chunkSize = 50;
+        let documentsUrnsChuncks = [];
+        for (let i = 0; i < documentsUrns.length; i += chunkSize) {
+            const chunk = documentsUrns.slice(i, i + chunkSize);
+            documentsUrnsChuncks.push(chunk);
+        }
+
+        for (const [count, documentsUrnsChunck] of documentsUrnsChuncks.entries()) {
+            try {
+                const documentsCounter = count * chunkSize + documentsUrnsChunck.length;
+                console.log(`Reading ${documentsCounter} / ${documentsUrns.length} documents for project ${projectId}`);
+                const listItemsResults = await listItems(projectId, documentsUrnsChunck, accessToken);
+                listItemsResults.data.forEach((item) => { item['project_id'] = projectId }); // Inject project_id to all items
+                documentsDetails = documentsDetails.concat(listItemsResults.data);
+            } catch (err) {
+                console.error("ERROR:", JSON.stringify(err.response.data.errors));
+            }
+        }
+    }
+
+    console.log(`Collected ${documentsDetails.length} documents details`);
+    return documentsDetails;
 }
 
 async function getCredentials() {
@@ -59,6 +90,54 @@ async function getCredentials() {
     let response = await axios.post(url, data, opts);
 
     return response.data.access_token;
+}
+
+async function listItems(projectId, documentsUrns, token) {
+    let url = `https://developer.api.autodesk.com/data/v1/projects/b.${projectId}/commands`;
+    let opts = {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/vnd.api+json'
+        }
+    };
+    let requestDocumentsUrns = documentsUrns.map(documentsUrn => ({ "type": "items", "id": documentsUrn }));
+    let data = {
+        "jsonapi": {
+            "version": "1.0"
+        },
+        "data": {
+            "type": "commands",
+            "attributes": {
+                "extension": {
+                    "type": "commands:autodesk.core:ListItems",
+                    "version": "1.1.0",
+                    "data": {
+                        "includePathInProject": true
+                    }
+                }
+            },
+            "relationships": {
+                "resources": {
+                    "data": requestDocumentsUrns
+                }
+            }
+        }
+    };
+
+    try {
+        let response = await axios.post(url, data, opts);
+        let results = response.data.data.relationships.resources;
+        return results;
+    } catch (err) {
+        if (err.isAxiosError && err.response && err.response.status == 429 && err.response.headers['retry-after']) {
+            const retryAfter = parseInt(err.response.headers["retry-after"]);
+            console.error(`RATE LIMIT: API Quota limit exceeded. Retrying after ${retryAfter} seconds`);
+            await new Promise(resolve => setTimeout(resolve, ++retryAfter * 1000));
+            return listItems(projectId, documentsUrns, token);
+        } else {
+            throw err;
+        }
+    }
 }
 
 function groupBy(objectArray, keyProperty, valueProperty, uniqueOnly = true) {
