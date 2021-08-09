@@ -22,5 +22,8 @@
   "bugs": {
     "url": "https://github.com/ahmad-hisham/acc-process-data-extract/issues"
   },
-  "homepage": "https://github.com/ahmad-hisham/acc-process-data-extract#readme"
+  "homepage": "https://github.com/ahmad-hisham/acc-process-data-extract#readme",
+  "dependencies": {
+    "papaparse": "^5.3.1"
+  }
 }
