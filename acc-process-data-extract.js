@@ -75,6 +75,38 @@ async function readUrnsData(projects) {
     return documentsDetails;
 }
 
+async function writeDocumentsTable(documentsData) {
+    const fileName = "documents_documents.csv";
+
+    // Condition data array for serialization
+    let documentsTable = documentsData.map((document) => ({
+            "id": document.id,
+            "bim360_project_id": document.project_id,
+            "name": document.meta.attributes.displayName,
+            "path": document.meta.attributes.pathInProject,
+            "created_at": document.meta.attributes.createTime,
+            "created_by": document.meta.attributes.createUserId,
+            "created_by_name": document.meta.attributes.createUserName,
+            "updated_at": document.meta.attributes.lastModifiedTime,
+            "updated_by": document.meta.attributes.lastModifiedUserId,
+            "updated_by_name": document.meta.attributes.lastModifiedUserName,
+            "hidden": document.meta.attributes.hidden,
+            "type": document.meta.attributes.extension.type,
+            "link": document.meta.links.webView ? document.meta.links.webView.href : '',
+            "parent_id": document.meta.relationships.parent ? document.meta.relationships.parent.data.id : ''
+        })
+    );
+
+    // Convert objects data to CSV string
+    let csvData = Papa.unparse(documentsTable, { header: true });
+
+    // Write all data read from all folders
+    let csvContents = "\ufeff" + csvData + "\r\n";
+    await fs.writeFile(fileName, csvContents, { encoding: "utf8" });
+
+    return fileName;
+}
+
 async function getCredentials() {
     const client_id = config.credentials.client_id;
     const client_secret = config.credentials.client_secret;
@@ -156,6 +188,8 @@ function groupBy(objectArray, keyProperty, valueProperty, uniqueOnly = true) {
 async function run() {
     let documentsUrns = await readCSVFiles();
     let documentsData = await readUrnsData(documentsUrns);
+    let fileName = await writeDocumentsTable(documentsData);
+    console.log(`Written ${fileName}`);
 }
 
 run();
