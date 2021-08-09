@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/ahmad-hisham/acc-process-data-extract#readme",
   "dependencies": {
+    "axios": "^0.21.1",
     "papaparse": "^5.3.1"
   }
 }
