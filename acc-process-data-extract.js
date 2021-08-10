@@ -63,7 +63,18 @@ async function readUrnsData(projects) {
                 const documentsCounter = count * chunkSize + documentsUrnsChunck.length;
                 console.log(`Reading ${documentsCounter} / ${documentsUrns.length} documents for project ${projectId}`);
                 const listItemsResults = await listItems(projectId, documentsUrnsChunck, accessToken);
-                listItemsResults.data.forEach((item) => { item['project_id'] = projectId }); // Inject project_id to all items
+                const versionDetailsResults = await getVersionsDetails(projectId, documentsUrnsChunck, accessToken);
+
+                listItemsResults.data.forEach((item) => {
+                    // Inject project_id to all items
+                    item['project_id'] = projectId;
+                    // Inject additional details from version results
+                    const itemVersion = versionDetailsResults.find((version) => version.itemUrn === item.id);
+                    if (itemVersion) {
+                        item['customAttributes'] = itemVersion.customAttributes;
+                    }
+                }); 
+
                 documentsDetails = documentsDetails.concat(listItemsResults.data);
             } catch (err) {
                 console.error("ERROR:", JSON.stringify(err.response.data.errors));
@@ -99,6 +110,34 @@ async function writeDocumentsTable(documentsData) {
 
     // Convert objects data to CSV string
     let csvData = Papa.unparse(documentsTable, { header: true });
+
+    // Write all data read from all folders
+    let csvContents = "\ufeff" + csvData + "\r\n";
+    await fs.writeFile(fileName, csvContents, { encoding: "utf8" });
+
+    return fileName;
+}
+
+async function writeCustomAttributesTable(documentsData) {
+    const fileName = "documents_custom_attributes.csv";
+
+    // Extract documents custom attributes for serialization
+    let customAttributesTable = [];
+    documentsData.forEach((document) => {
+        if (document.customAttributes && document.customAttributes.length > 0) {
+            const documentUrn = document.id;
+            const documentProject = document.project_id;
+            document.customAttributes.forEach((customAttribute) => {
+                // Inject document_urn and project_id to all items
+                customAttribute['document_urn'] = documentUrn;
+                customAttribute['bim360_project_id'] = documentProject;
+            });
+            customAttributesTable.push(...document.customAttributes);
+        }
+    });
+
+    // Convert objects data to CSV string
+    let csvData = Papa.unparse(customAttributesTable, { header: true });
 
     // Write all data read from all folders
     let csvContents = "\ufeff" + csvData + "\r\n";
@@ -172,6 +211,34 @@ async function listItems(projectId, documentsUrns, token) {
     }
 }
 
+async function getVersionsDetails(projectId, documentsUrns, token) {
+    let url = `https://developer.api.autodesk.com/bim360/docs/v1/projects/${projectId}/versions:batch-get`;
+    let opts = {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    };
+    let data = {
+        "urns": documentsUrns
+    };
+
+    try {
+        let response = await axios.post(url, data, opts);
+        let results = response.data.results;
+        return results;
+    } catch (err) {
+        if (err.isAxiosError && err.response && err.response.status == 429 && err.response.headers['retry-after']) {
+            const retryAfter = parseInt(err.response.headers["retry-after"]);
+            console.error(`Rate limit: API Quota limit exceeded. Retrying after ${retryAfter} seconds`);
+            await new Promise(resolve => setTimeout(resolve, ++retryAfter * 1000));
+            return getVersionsDetails(projectId, documentsUrns, token);
+        } else {
+            throw err;
+        }
+    }
+}
+
 function groupBy(objectArray, keyProperty, valueProperty, uniqueOnly = true) {
     return objectArray.reduce((acc, obj) => {
         let key = obj[keyProperty]
@@ -188,8 +255,9 @@ function groupBy(objectArray, keyProperty, valueProperty, uniqueOnly = true) {
 async function run() {
     let documentsUrns = await readCSVFiles();
     let documentsData = await readUrnsData(documentsUrns);
-    let fileName = await writeDocumentsTable(documentsData);
-    console.log(`Written ${fileName}`);
+    let filenameDocuments = await writeDocumentsTable(documentsData);
+    let filenameAttributes = await writeCustomAttributesTable(documentsData);
+    console.log(`Written ${filenameDocuments} ${filenameAttributes}`);
 }
 
 run();
