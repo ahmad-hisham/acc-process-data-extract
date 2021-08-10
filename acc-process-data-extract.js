@@ -71,6 +71,8 @@ async function readUrnsData(projects) {
                     // Inject additional details from version results
                     const itemVersion = versionDetailsResults.find((version) => version.itemUrn === item.id);
                     if (itemVersion) {
+                        item['storageSize'] = itemVersion.storageSize;
+                        item['revisionNumber'] = itemVersion.revisionNumber;
                         item['customAttributes'] = itemVersion.customAttributes;
                     }
                 }); 
@@ -89,18 +91,20 @@ async function readUrnsData(projects) {
 async function writeDocumentsTable(documentsData) {
     const fileName = "documents_documents.csv";
 
-    // Condition data array for serialization
+    // Extract documents list for serialization
     let documentsTable = documentsData.map((document) => ({
             "id": document.id,
             "bim360_project_id": document.project_id,
             "name": document.meta.attributes.displayName,
             "path": document.meta.attributes.pathInProject,
+            "version": document.revisionNumber,
             "created_at": document.meta.attributes.createTime,
             "created_by": document.meta.attributes.createUserId,
             "created_by_name": document.meta.attributes.createUserName,
             "updated_at": document.meta.attributes.lastModifiedTime,
             "updated_by": document.meta.attributes.lastModifiedUserId,
             "updated_by_name": document.meta.attributes.lastModifiedUserName,
+            "storage_size": document.storageSize,
             "hidden": document.meta.attributes.hidden,
             "type": document.meta.attributes.extension.type,
             "link": document.meta.links.webView ? document.meta.links.webView.href : '',
