@@ -6,6 +6,8 @@ const axios = require('axios').default;
 const config = require("./acc-config");
 const forgeUrl = "https://developer.api.autodesk.com";
 
+let accessToken = null;
+
 async function readCSVFiles() {
     // Files to process
     const inputFiles = [
@@ -40,8 +42,6 @@ async function readCSVFiles() {
 }
 
 async function readUrnsData(projects) {
-    const accessToken = await getCredentials();
-
     let documentsDetails = [];
 
     for (const project in projects) {
@@ -63,8 +63,8 @@ async function readUrnsData(projects) {
             try {
                 const documentsCounter = count * chunkSize + documentsUrnsChunck.length;
                 console.log(`Reading ${documentsCounter} / ${documentsUrns.length} documents for project ${projectId}`);
-                const listItemsResults = await listItems(projectId, documentsUrnsChunck, accessToken);
-                const versionDetailsResults = await getVersionsDetails(projectId, documentsUrnsChunck, accessToken);
+                const listItemsResults = await listItems(projectId, documentsUrnsChunck);
+                const versionDetailsResults = await getVersionsDetails(projectId, documentsUrnsChunck);
 
                 listItemsResults.forEach((item) => {
                     // Inject project_id to all items
@@ -168,12 +168,11 @@ async function getCredentials() {
     return response.data.access_token;
 }
 
-async function listItems(projectId, documentsUrns, token) {
+async function listItems(projectId, documentsUrns) {
     let requestConfig = {
         url: `/data/v1/projects/b.${projectId}/commands`,
         method: 'post',
         headers: {
-            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/vnd.api+json'
         },
         data: {
@@ -204,12 +203,11 @@ async function listItems(projectId, documentsUrns, token) {
     return response.data.relationships.resources.data;
 }
 
-async function getVersionsDetails(projectId, documentsUrns, token) {
+async function getVersionsDetails(projectId, documentsUrns) {
     let requestConfig = {
         url: `/bim360/docs/v1/projects/${projectId}/versions:batch-get`,
         method: 'post',
         headers: {
-            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
         },
         data: {
@@ -225,13 +223,20 @@ async function executeForgeCallWithRetry(config) {
     // Set Forge BaseURL
     config.baseURL = forgeUrl;
 
+    // Retrieve accessToken if not used
+    if (!accessToken)
+        accessToken = await getCredentials();
+    // Add AccessTokens to headers
+    if (!config.headers["Authorization"])
+        config.headers["Authorization"] = `Bearer ${accessToken}`;
+
     try {
         let response = await axios(config);
         return response.data;
     } catch (err) {
-        if (err.isAxiosError && err.response && err.response.status == 429 && err.response.headers['retry-after']) {
+        if (err.isAxiosError && err.response && err.response.status == 429 && err.response.headers["retry-after"]) {
             const retryAfter = parseInt(err.response.headers["retry-after"]);
-            console.error(`Rate limit: API Quota limit exceeded. Retrying after ${retryAfter} seconds`);
+            console.error(`RATE LIMIT: API Quota limit exceeded. Retrying after ${retryAfter} seconds`);
             await new Promise(resolve => setTimeout(resolve, ++retryAfter * 1000));
             return executeForgeCallWithRetry(config);
         } else {
