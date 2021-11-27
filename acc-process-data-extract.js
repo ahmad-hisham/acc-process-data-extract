@@ -4,6 +4,7 @@ const fs = require('fs/promises');
 const Papa = require('papaparse');
 const axios = require('axios').default;
 const config = require("./acc-config");
+const forgeUrl = "https://developer.api.autodesk.com";
 
 async function readCSVFiles() {
     // Files to process
@@ -65,7 +66,7 @@ async function readUrnsData(projects) {
                 const listItemsResults = await listItems(projectId, documentsUrnsChunck, accessToken);
                 const versionDetailsResults = await getVersionsDetails(projectId, documentsUrnsChunck, accessToken);
 
-                listItemsResults.data.forEach((item) => {
+                listItemsResults.forEach((item) => {
                     // Inject project_id to all items
                     item['project_id'] = projectId;
                     // Inject additional details from version results
@@ -77,7 +78,7 @@ async function readUrnsData(projects) {
                     }
                 }); 
 
-                documentsDetails = documentsDetails.concat(listItemsResults.data);
+                documentsDetails = documentsDetails.concat(listItemsResults);
             } catch (err) {
                 console.error("ERROR:", JSON.stringify(err.response.data.errors));
             }
@@ -168,75 +169,71 @@ async function getCredentials() {
 }
 
 async function listItems(projectId, documentsUrns, token) {
-    let url = `https://developer.api.autodesk.com/data/v1/projects/b.${projectId}/commands`;
-    let opts = {
+    let requestConfig = {
+        url: `/data/v1/projects/b.${projectId}/commands`,
+        method: 'post',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/vnd.api+json'
-        }
-    };
-    let requestDocumentsUrns = documentsUrns.map(documentsUrn => ({ "type": "items", "id": documentsUrn }));
-    let data = {
-        "jsonapi": {
-            "version": "1.0"
         },
-        "data": {
-            "type": "commands",
-            "attributes": {
-                "extension": {
-                    "type": "commands:autodesk.core:ListItems",
-                    "version": "1.1.0",
-                    "data": {
-                        "includePathInProject": true
-                    }
-                }
+        data: {
+            "jsonapi": {
+                "version": "1.0"
             },
-            "relationships": {
-                "resources": {
-                    "data": requestDocumentsUrns
+            "data": {
+                "type": "commands",
+                "attributes": {
+                    "extension": {
+                        "type": "commands:autodesk.core:ListItems",
+                        "version": "1.1.0",
+                        "data": {
+                            "includePathInProject": true
+                        }
+                    }
+                },
+                "relationships": {
+                    "resources": {
+                        "data": documentsUrns.map(documentsUrn => ({ "type": "items", "id": documentsUrn }))
+                    }
                 }
             }
         }
     };
 
-    try {
-        let response = await axios.post(url, data, opts);
-        let results = response.data.data.relationships.resources;
-        return results;
-    } catch (err) {
-        if (err.isAxiosError && err.response && err.response.status == 429 && err.response.headers['retry-after']) {
-            const retryAfter = parseInt(err.response.headers["retry-after"]);
-            console.error(`RATE LIMIT: API Quota limit exceeded. Retrying after ${retryAfter} seconds`);
-            await new Promise(resolve => setTimeout(resolve, ++retryAfter * 1000));
-            return listItems(projectId, documentsUrns, token);
-        } else {
-            throw err;
-        }
-    }
+    let response = await executeForgeCallWithRetry(requestConfig);
+    return response.data.relationships.resources.data;
 }
 
 async function getVersionsDetails(projectId, documentsUrns, token) {
-    let url = `https://developer.api.autodesk.com/bim360/docs/v1/projects/${projectId}/versions:batch-get`;
-    let opts = {
+    let requestConfig = {
+        url: `/bim360/docs/v1/projects/${projectId}/versions:batch-get`,
+        method: 'post',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
+        },
+        data: {
+            "urns": documentsUrns
         }
-    };
-    let data = {
-        "urns": documentsUrns
-    };
+    }
+
+    let response = await executeForgeCallWithRetry(requestConfig);
+    return response.results;
+}
+
+async function executeForgeCallWithRetry(config) {
+    // Set Forge BaseURL
+    config.baseURL = forgeUrl;
 
     try {
-        let response = await axios.post(url, data, opts);
-        let results = response.data.results;
-        return results;
+        let response = await axios(config);
+        return response.data;
     } catch (err) {
         if (err.isAxiosError && err.response && err.response.status == 429 && err.response.headers['retry-after']) {
             const retryAfter = parseInt(err.response.headers["retry-after"]);
             console.error(`Rate limit: API Quota limit exceeded. Retrying after ${retryAfter} seconds`);
             await new Promise(resolve => setTimeout(resolve, ++retryAfter * 1000));
-            return getVersionsDetails(projectId, documentsUrns, token);
+            return executeForgeCallWithRetry(config);
         } else {
             throw err;
         }
