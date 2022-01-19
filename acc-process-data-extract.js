@@ -12,7 +12,7 @@ async function readCSVFiles() {
     // Files to process
     const inputFiles = [
         { name: "issues_issues.csv", 			projectProperty: "bim360_project_id", urnProperty: "linked_document_urn" },
-        { name: "reviews_review_documents.csv", projectProperty: "bim360_project_id", urnProperty: "lineage_urn" }
+        { name: "reviews_review_documents.csv", projectProperty: "bim360_project_id", urnProperty: "versioned_urn" }
     ];
 
     let documentUrns = [];
@@ -75,6 +75,7 @@ async function readUrnsData(projects) {
                         item['storageSize'] = itemVersion.storageSize;
                         item['revisionNumber'] = itemVersion.revisionNumber;
                         item['customAttributes'] = itemVersion.customAttributes;
+                        item['versionedUrn'] = itemVersion.urn;
                     }
                 }); 
 
@@ -108,6 +109,7 @@ async function writeDocumentsTable(documentsData) {
             "storage_size": document.storageSize,
             "hidden": document.meta.attributes.hidden,
             "type": document.meta.attributes.extension.type,
+            "versioned_urn": document.versionedUrn,
             "link": document.meta.links.webView ? document.meta.links.webView.href : '',
             "parent_id": document.meta.relationships.parent ? document.meta.relationships.parent.data.id : ''
         })
